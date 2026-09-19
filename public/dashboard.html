@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard - Toko POS</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebar-placeholder"></div>
+    <div class="main">
+      <h1>Dashboard</h1>
+
+      <div class="cards">
+        <div class="card">
+          <div class="label">Penjualan Hari Ini</div>
+          <div class="value" id="today-revenue">Rp0</div>
+        </div>
+        <div class="card">
+          <div class="label">Transaksi Hari Ini</div>
+          <div class="value" id="today-count">0</div>
+        </div>
+        <div class="card">
+          <div class="label">Penjualan Bulan Ini</div>
+          <div class="value" id="month-revenue">Rp0</div>
+        </div>
+        <div class="card">
+          <div class="label">Transaksi Bulan Ini</div>
+          <div class="value" id="month-count">0</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Produk Terlaris (7 Hari Terakhir)</h2>
+        <table>
+          <thead>
+            <tr><th>Produk</th><th>Terjual</th><th>Pendapatan</th></tr>
+          </thead>
+          <tbody id="top-products-body">
+            <tr><td colspan="3">Memuat...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Stok Menipis</h2>
+        <table>
+          <thead>
+            <tr><th>SKU</th><th>Produk</th><th>Stok</th></tr>
+          </thead>
+          <tbody id="low-stock-body">
+            <tr><td colspan="3">Memuat...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    (async function () {
+      const user = await initLayout('dashboard');
+      if (!user) return;
+
+      try {
+        const { today, month, lowStock, topProducts } = await api.get('/api/dashboard/summary');
+
+        document.getElementById('today-revenue').textContent = formatRupiah(today.revenue);
+        document.getElementById('today-count').textContent = today.count;
+        document.getElementById('month-revenue').textContent = formatRupiah(month.revenue);
+        document.getElementById('month-count').textContent = month.count;
+
+        const topBody = document.getElementById('top-products-body');
+        topBody.innerHTML = topProducts.length
+          ? topProducts
+              .map(
+                (p) =>
+                  `<tr><td>${p.name}</td><td>${p.total_qty}</td><td>${formatRupiah(p.total_revenue)}</td></tr>`
+              )
+              .join('')
+          : '<tr><td colspan="3">Belum ada penjualan</td></tr>';
+
+        const lowBody = document.getElementById('low-stock-body');
+        lowBody.innerHTML = lowStock.length
+          ? lowStock
+              .map(
+                (p) =>
+                  `<tr><td>${p.sku}</td><td>${p.name}</td><td><span class="badge low">${p.stock}</span></td></tr>`
+              )
+              .join('')
+          : '<tr><td colspan="3">Semua stok aman</td></tr>';
+      } catch (err) {
+        alert(err.message);
+      }
+    })();
+  </script>
+</body>
+</html>
