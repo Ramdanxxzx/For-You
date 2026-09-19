@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Produk - Toko POS</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebar-placeholder"></div>
+    <div class="main">
+      <h1>Produk</h1>
+
+      <div class="toolbar">
+        <input type="text" id="search-input" placeholder="Cari produk..." style="max-width:280px;" />
+        <button class="primary" id="add-btn">+ Tambah Produk</button>
+      </div>
+
+      <div class="panel">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th><th>Nama</th><th>Kategori</th><th>Harga Modal</th><th>Harga Jual</th><th>Stok</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="product-body">
+            <tr><td colspan="7">Memuat...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="form-backdrop">
+    <div class="modal">
+      <h2 id="form-title">Tambah Produk</h2>
+      <div class="error-msg" id="form-error"></div>
+      <form id="product-form">
+        <input type="hidden" id="product-id" />
+        <label for="sku">SKU</label>
+        <input type="text" id="sku" required />
+        <label for="name">Nama Produk</label>
+        <input type="text" id="name" required />
+        <label for="category">Kategori</label>
+        <input type="text" id="category" />
+        <div class="row">
+          <div>
+            <label for="cost">Harga Modal</label>
+            <input type="number" id="cost" min="0" required />
+          </div>
+          <div>
+            <label for="price">Harga Jual</label>
+            <input type="number" id="price" min="0" required />
+          </div>
+        </div>
+        <label for="stock">Stok</label>
+        <input type="number" id="stock" min="0" required />
+        <div class="row">
+          <button type="button" class="ghost" id="cancel-btn">Batal</button>
+          <button type="submit" class="primary" id="save-btn">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    let isAdmin = false;
+
+    function renderProducts(list) {
+      const body = document.getElementById('product-body');
+      if (!list.length) {
+        body.innerHTML = '<tr><td colspan="7">Belum ada produk</td></tr>';
+        return;
+      }
+      body.innerHTML = list
+        .map(
+          (p) => `
+        <tr>
+          <td>${p.sku}</td>
+          <td>${p.name}</td>
+          <td>${p.category || '-'}</td>
+          <td>${formatRupiah(p.cost)}</td>
+          <td>${formatRupiah(p.price)}</td>
+          <td>${p.stock <= 5 ? `<span class="badge low">${p.stock}</span>` : p.stock}</td>
+          <td>
+            ${
+              isAdmin
+                ? `<button class="secondary" data-action="edit" data-id="${p.id}">Ubah</button>
+                   <button class="danger" data-action="delete" data-id="${p.id}">Hapus</button>`
+                : ''
+            }
+          </td>
+        </tr>`
+        )
+        .join('');
+
+      if (isAdmin) {
+        body.querySelectorAll('[data-action="edit"]').forEach((btn) =>
+          btn.addEventListener('click', () => openEdit(Number(btn.dataset.id), list))
+        );
+        body.querySelectorAll('[data-action="delete"]').forEach((btn) =>
+          btn.addEventListener('click', () => deleteProduct(Number(btn.dataset.id)))
+        );
+      }
+    }
+
+    async function loadProducts(q) {
+      const { products } = await api.get('/api/products' + (q ? `?q=${encodeURIComponent(q)}` : ''));
+      renderProducts(products);
+      return products;
+    }
+
+    function openForm() {
+      document.getElementById('form-error').classList.remove('show');
+      document.getElementById('form-backdrop').classList.add('show');
+    }
+    function closeForm() {
+      document.getElementById('form-backdrop').classList.remove('show');
+      document.getElementById('product-form').reset();
+      document.getElementById('product-id').value = '';
+    }
+
+    function openAdd() {
+      document.getElementById('form-title').textContent = 'Tambah Produk';
+      document.getElementById('product-form').reset();
+      document.getElementById('product-id').value = '';
+      openForm();
+    }
+
+    function openEdit(id, list) {
+      const p = list.find((x) => x.id === id);
+      if (!p) return;
+      document.getElementById('form-title').textContent = 'Ubah Produk';
+      document.getElementById('product-id').value = p.id;
+      document.getElementById('sku').value = p.sku;
+      document.getElementById('name').value = p.name;
+      document.getElementById('category').value = p.category || '';
+      document.getElementById('cost').value = p.cost;
+      document.getElementById('price').value = p.price;
+      document.getElementById('stock').value = p.stock;
+      openForm();
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm('Hapus produk ini?')) return;
+      try {
+        await api.del('/api/products/' + id);
+        await loadProducts(document.getElementById('search-input').value.trim());
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function submitForm(e) {
+      e.preventDefault();
+      const errorBox = document.getElementById('form-error');
+      errorBox.classList.remove('show');
+      const id = document.getElementById('product-id').value;
+      const payload = {
+        sku: document.getElementById('sku').value.trim(),
+        name: document.getElementById('name').value.trim(),
+        category: document.getElementById('category').value.trim(),
+        cost: Number(document.getElementById('cost').value),
+        price: Number(document.getElementById('price').value),
+        stock: Number(document.getElementById('stock').value),
+      };
+      try {
+        if (id) {
+          await api.put('/api/products/' + id, payload);
+        } else {
+          await api.post('/api/products', payload);
+        }
+        closeForm();
+        await loadProducts(document.getElementById('search-input').value.trim());
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.classList.add('show');
+      }
+    }
+
+    (async function () {
+      const user = await initLayout('products');
+      if (!user) return;
+      isAdmin = user.role === 'admin';
+      document.getElementById('add-btn').style.display = isAdmin ? '' : 'none';
+
+      await loadProducts();
+
+      document.getElementById('search-input').addEventListener('input', (e) => loadProducts(e.target.value.trim()));
+      document.getElementById('add-btn').addEventListener('click', openAdd);
+      document.getElementById('cancel-btn').addEventListener('click', closeForm);
+      document.getElementById('product-form').addEventListener('submit', submitForm);
+    })();
+  </script>
+</body>
+</html>

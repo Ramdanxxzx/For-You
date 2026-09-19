@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kasir - Toko POS</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebar-placeholder"></div>
+    <div class="main">
+      <h1>Kasir</h1>
+
+      <div class="pos-layout">
+        <div>
+          <input type="text" id="search-input" placeholder="Cari produk (nama atau SKU)..." />
+          <div class="product-grid" id="product-grid">
+            <p>Memuat produk...</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Keranjang</h2>
+          <div class="cart-list" id="cart-list">
+            <p style="color:#6b7280; font-size:13px;">Keranjang masih kosong</p>
+          </div>
+
+          <div class="totals-box">
+            <div class="line total">
+              <span>Total</span>
+              <span id="cart-total">Rp0</span>
+            </div>
+            <label for="paid-input">Uang Dibayar</label>
+            <input type="number" id="paid-input" min="0" placeholder="0" />
+            <div class="line">
+              <span>Kembalian</span>
+              <span id="change-amount">Rp0</span>
+            </div>
+            <div class="error-msg" id="pos-error"></div>
+            <button class="primary" style="width:100%" id="checkout-btn" disabled>Bayar &amp; Cetak Struk</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="receipt-backdrop">
+    <div class="modal">
+      <h2>Transaksi Berhasil</h2>
+      <div class="receipt" id="receipt-content"></div>
+      <div class="row" style="margin-top:16px;">
+        <button class="ghost" id="close-receipt-btn">Tutup</button>
+        <button class="primary" id="print-receipt-btn">Cetak</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    let products = [];
+    let cart = []; // { productId, name, price, qty, stock }
+
+    function renderProducts(list) {
+      const grid = document.getElementById('product-grid');
+      if (!list.length) {
+        grid.innerHTML = '<p>Tidak ada produk ditemukan.</p>';
+        return;
+      }
+      grid.innerHTML = list
+        .map(
+          (p) => `
+        <button class="product-tile" data-id="${p.id}" ${p.stock <= 0 ? 'disabled' : ''}>
+          <div class="p-name">${p.name}</div>
+          <div class="p-price">${formatRupiah(p.price)}</div>
+          <div class="p-stock">Stok: ${p.stock}</div>
+        </button>`
+        )
+        .join('');
+
+      grid.querySelectorAll('.product-tile').forEach((btn) => {
+        btn.addEventListener('click', () => addToCart(Number(btn.dataset.id)));
+      });
+    }
+
+    function addToCart(productId) {
+      const product = products.find((p) => p.id === productId);
+      if (!product) return;
+      const existing = cart.find((c) => c.productId === productId);
+      if (existing) {
+        if (existing.qty + 1 > product.stock) {
+          showPosError(`Stok ${product.name} tidak cukup`);
+          return;
+        }
+        existing.qty += 1;
+      } else {
+        cart.push({ productId, name: product.name, price: product.price, qty: 1, stock: product.stock });
+      }
+      renderCart();
+    }
+
+    function changeQty(productId, delta) {
+      const item = cart.find((c) => c.productId === productId);
+      if (!item) return;
+      const newQty = item.qty + delta;
+      if (newQty <= 0) {
+        cart = cart.filter((c) => c.productId !== productId);
+      } else if (newQty > item.stock) {
+        showPosError(`Stok ${item.name} tidak cukup`);
+        return;
+      } else {
+        item.qty = newQty;
+      }
+      renderCart();
+    }
+
+    function cartTotal() {
+      return cart.reduce((sum, c) => sum + c.price * c.qty, 0);
+    }
+
+    function renderCart() {
+      const list = document.getElementById('cart-list');
+      list.innerHTML = cart.length
+        ? cart
+            .map(
+              (c) => `
+        <div class="cart-item">
+          <div>
+            <div>${c.name}</div>
+            <div style="color:#6b7280;">${formatRupiah(c.price)} x ${c.qty}</div>
+          </div>
+          <div class="qty-controls">
+            <button data-action="dec" data-id="${c.productId}">-</button>
+            <span>${c.qty}</span>
+            <button data-action="inc" data-id="${c.productId}">+</button>
+          </div>
+        </div>`
+            )
+            .join('')
+        : '<p style="color:#6b7280; font-size:13px;">Keranjang masih kosong</p>';
+
+      list.querySelectorAll('button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const delta = btn.dataset.action === 'inc' ? 1 : -1;
+          changeQty(Number(btn.dataset.id), delta);
+        });
+      });
+
+      const total = cartTotal();
+      document.getElementById('cart-total').textContent = formatRupiah(total);
+      recalcChange();
+      document.getElementById('checkout-btn').disabled = cart.length === 0;
+    }
+
+    function recalcChange() {
+      const total = cartTotal();
+      const paid = Number(document.getElementById('paid-input').value) || 0;
+      const change = paid - total;
+      document.getElementById('change-amount').textContent = formatRupiah(change > 0 ? change : 0);
+    }
+
+    function showPosError(msg) {
+      const box = document.getElementById('pos-error');
+      box.textContent = msg;
+      box.classList.add('show');
+      setTimeout(() => box.classList.remove('show'), 3000);
+    }
+
+    async function loadProducts(q) {
+      const { products: list } = await api.get('/api/products' + (q ? `?q=${encodeURIComponent(q)}` : ''));
+      products = list;
+      renderProducts(list);
+    }
+
+    async function checkout() {
+      const total = cartTotal();
+      const paid = Number(document.getElementById('paid-input').value) || 0;
+      if (paid < total) {
+        showPosError('Uang dibayar kurang dari total belanja');
+        return;
+      }
+      const btn = document.getElementById('checkout-btn');
+      btn.disabled = true;
+      btn.textContent = 'Memproses...';
+      try {
+        const payload = {
+          items: cart.map((c) => ({ productId: c.productId, qty: c.qty })),
+          paid,
+        };
+        const { transaction, items } = await api.post('/api/transactions', payload);
+        showReceipt(transaction, items);
+        cart = [];
+        document.getElementById('paid-input').value = '';
+        renderCart();
+        await loadProducts(document.getElementById('search-input').value.trim());
+      } catch (err) {
+        showPosError(err.message);
+      } finally {
+        btn.disabled = cart.length === 0;
+        btn.textContent = 'Bayar & Cetak Struk';
+      }
+    }
+
+    function showReceipt(tx, items) {
+      const lines = [];
+      lines.push('TOKO POS');
+      lines.push('No. Invoice: ' + tx.invoice_no);
+      lines.push('Tanggal    : ' + formatDateTime(tx.created_at));
+      lines.push('----------------------------');
+      items.forEach((it) => {
+        lines.push(`${it.name}`);
+        lines.push(`  ${it.qty} x ${formatRupiah(it.price)} = ${formatRupiah(it.subtotal)}`);
+      });
+      lines.push('----------------------------');
+      lines.push('Total     : ' + formatRupiah(tx.total));
+      lines.push('Dibayar   : ' + formatRupiah(tx.paid));
+      lines.push('Kembalian : ' + formatRupiah(tx.change_amount));
+      document.getElementById('receipt-content').textContent = lines.join('\n');
+      document.getElementById('receipt-backdrop').classList.add('show');
+    }
+
+    (async function () {
+      const user = await initLayout('pos');
+      if (!user) return;
+
+      await loadProducts();
+      renderCart();
+
+      document.getElementById('search-input').addEventListener('input', (e) => {
+        loadProducts(e.target.value.trim());
+      });
+      document.getElementById('paid-input').addEventListener('input', recalcChange);
+      document.getElementById('checkout-btn').addEventListener('click', checkout);
+      document.getElementById('close-receipt-btn').addEventListener('click', () => {
+        document.getElementById('receipt-backdrop').classList.remove('show');
+      });
+      document.getElementById('print-receipt-btn').addEventListener('click', () => window.print());
+    })();
+  </script>
+</body>
+</html>

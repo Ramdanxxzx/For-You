@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Laporan - Toko POS</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebar-placeholder"></div>
+    <div class="main">
+      <h1>Laporan Penjualan</h1>
+
+      <div class="toolbar">
+        <div class="row" style="max-width:420px;">
+          <div>
+            <label for="from-date">Dari</label>
+            <input type="date" id="from-date" />
+          </div>
+          <div>
+            <label for="to-date">Sampai</label>
+            <input type="date" id="to-date" />
+          </div>
+        </div>
+        <button class="secondary" id="filter-btn">Terapkan Filter</button>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <div class="label">Jumlah Transaksi</div>
+          <div class="value" id="tx-count">0</div>
+        </div>
+        <div class="card">
+          <div class="label">Total Penjualan</div>
+          <div class="value" id="tx-total">Rp0</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <table>
+          <thead>
+            <tr><th>Invoice</th><th>Tanggal</th><th>Kasir</th><th>Total</th><th></th></tr>
+          </thead>
+          <tbody id="tx-body">
+            <tr><td colspan="5">Memuat...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="detail-backdrop">
+    <div class="modal">
+      <h2>Detail Transaksi</h2>
+      <div class="receipt" id="detail-content"></div>
+      <div class="row" style="margin-top:16px;">
+        <button class="ghost" id="close-detail-btn">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    async function loadTransactions() {
+      const from = document.getElementById('from-date').value;
+      const to = document.getElementById('to-date').value;
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+
+      const { transactions } = await api.get('/api/transactions' + (params.toString() ? '?' + params : ''));
+
+      document.getElementById('tx-count').textContent = transactions.length;
+      document.getElementById('tx-total').textContent = formatRupiah(
+        transactions.reduce((s, t) => s + t.total, 0)
+      );
+
+      const body = document.getElementById('tx-body');
+      body.innerHTML = transactions.length
+        ? transactions
+            .map(
+              (t) => `
+        <tr>
+          <td>${t.invoice_no}</td>
+          <td>${formatDateTime(t.created_at)}</td>
+          <td>${t.cashier_name}</td>
+          <td>${formatRupiah(t.total)}</td>
+          <td><button class="secondary" data-id="${t.id}">Detail</button></td>
+        </tr>`
+            )
+            .join('')
+        : '<tr><td colspan="5">Belum ada transaksi pada rentang ini</td></tr>';
+
+      body.querySelectorAll('button[data-id]').forEach((btn) =>
+        btn.addEventListener('click', () => showDetail(Number(btn.dataset.id)))
+      );
+    }
+
+    async function showDetail(id) {
+      const { transaction, items } = await api.get('/api/transactions/' + id);
+      const lines = [];
+      lines.push('No. Invoice: ' + transaction.invoice_no);
+      lines.push('Tanggal    : ' + formatDateTime(transaction.created_at));
+      lines.push('Kasir      : ' + transaction.cashier_name);
+      lines.push('----------------------------');
+      items.forEach((it) => {
+        lines.push(`${it.name}`);
+        lines.push(`  ${it.qty} x ${formatRupiah(it.price)} = ${formatRupiah(it.subtotal)}`);
+      });
+      lines.push('----------------------------');
+      lines.push('Total     : ' + formatRupiah(transaction.total));
+      lines.push('Dibayar   : ' + formatRupiah(transaction.paid));
+      lines.push('Kembalian : ' + formatRupiah(transaction.change_amount));
+      document.getElementById('detail-content').textContent = lines.join('\n');
+      document.getElementById('detail-backdrop').classList.add('show');
+    }
+
+    (async function () {
+      const user = await initLayout('reports');
+      if (!user) return;
+
+      await loadTransactions();
+
+      document.getElementById('filter-btn').addEventListener('click', loadTransactions);
+      document.getElementById('close-detail-btn').addEventListener('click', () => {
+        document.getElementById('detail-backdrop').classList.remove('show');
+      });
+    })();
+  </script>
+</body>
+</html>

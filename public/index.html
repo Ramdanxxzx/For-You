@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Masuk - Toko POS</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <h1>Toko POS</h1>
+      <p class="subtitle">Masuk untuk mengelola kasir dan produk toko Anda.</p>
+      <div class="error-msg" id="error-box"></div>
+      <form id="login-form">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" required />
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required />
+        <button type="submit" class="primary" style="width:100%" id="submit-btn">Masuk</button>
+      </form>
+      <div class="login-hint">
+        Akun contoh:<br />
+        Admin &mdash; username: <b>admin</b>, password: <b>admin123</b><br />
+        Kasir &mdash; username: <b>kasir</b>, password: <b>kasir123</b>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    (async function redirectIfLoggedIn() {
+      try {
+        const data = await api.get('/api/auth/me');
+        if (data.user) window.location.href = '/dashboard.html';
+      } catch (e) {}
+    })();
+
+    const form = document.getElementById('login-form');
+    const errorBox = document.getElementById('error-box');
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.classList.remove('show');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Memproses...';
+      try {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        await api.post('/api/auth/login', { username, password });
+        window.location.href = '/dashboard.html';
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.classList.add('show');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Masuk';
+      }
+    });
+  </script>
+</body>
+</html>

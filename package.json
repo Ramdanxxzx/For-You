@@ -1,0 +1,17 @@
+{
+  "name": "toko-pos",
+  "version": "1.0.0",
+  "description": "Aplikasi kasir (POS) sederhana untuk toko: produk, transaksi, dan laporan penjualan.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0"
+  }
+}
