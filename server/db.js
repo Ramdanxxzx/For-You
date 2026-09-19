@@ -1,12 +1,16 @@
 const path = require('path');
+const fs = require('fs');
 const bcrypt = require('bcryptjs');
-const Database = require('better-sqlite3');
+const { DatabaseSync } = require('node:sqlite');
 
-const dbPath = path.join(__dirname, 'data', 'toko.db');
-const db = new Database(dbPath);
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+const dbPath = path.join(dataDir, 'toko.db');
+const db = new DatabaseSync(dbPath);
+
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -76,10 +80,14 @@ function seedIfEmpty() {
       ['SKU007', 'Sabun Mandi', 'Kebutuhan Rumah', 3000, 4500, 60],
       ['SKU008', 'Sikat Gigi', 'Kebutuhan Rumah', 2500, 4000, 45],
     ];
-    const insertMany = db.transaction((rows) => {
-      for (const row of rows) insertProduct.run(...row);
-    });
-    insertMany(samples);
+    db.exec('BEGIN');
+    try {
+      for (const row of samples) insertProduct.run(...row);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
   }
 }
 

@@ -1,6 +1,8 @@
 # Toko POS
 
-Aplikasi kasir (POS) sederhana untuk toko: manajemen produk, transaksi kasir, dan laporan penjualan. Backend Node.js/Express dengan database SQLite, frontend HTML/CSS/JS biasa (tanpa framework/build step).
+Aplikasi kasir (POS) sederhana untuk toko: manajemen produk, transaksi kasir, dan laporan penjualan. Backend Node.js/Express dengan database SQLite (modul bawaan `node:sqlite`, tanpa dependency native), frontend HTML/CSS/JS biasa (tanpa framework/build step).
+
+> Butuh **Node.js versi 22.5 atau lebih baru** (memakai modul bawaan `node:sqlite`, bukan native addon seperti `better-sqlite3`, supaya tidak perlu compiler C++/Visual Studio Build Tools saat `npm install`).
 
 ## Fitur
 
@@ -31,7 +33,7 @@ Buka `http://localhost:3000` di browser. Database SQLite (`server/data/toko.db`)
 ```
 server/
   index.js          # Entry point Express + session
-  db.js             # Koneksi SQLite, schema, seed data
+  db.js             # Koneksi SQLite (node:sqlite), schema, seed data
   middleware/auth.js
   routes/
     auth.js         # login/logout/me

@@ -27,7 +27,7 @@ router.post('/', requireLogin, (req, res) => {
     `INSERT INTO transaction_items (transaction_id, product_id, name, price, qty, subtotal) VALUES (?, ?, ?, ?, ?, ?)`
   );
 
-  const run = db.transaction(() => {
+  function runCheckout() {
     let total = 0;
     const resolvedItems = [];
 
@@ -59,10 +59,18 @@ router.post('/', requireLogin, (req, res) => {
     }
 
     return { transactionId, invoiceNo, total, paid: paidAmount, changeAmount };
-  });
+  }
 
   try {
-    const result = run();
+    db.exec('BEGIN');
+    let result;
+    try {
+      result = runCheckout();
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
     const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(result.transactionId);
     const txItems = db
       .prepare('SELECT * FROM transaction_items WHERE transaction_id = ?')
