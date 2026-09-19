@@ -33,6 +33,17 @@ app.use('/api/dashboard', dashboardRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-app.listen(PORT, () => {
-  console.log(`Aplikasi toko berjalan di http://localhost:${PORT}`);
-});
+function start(port = PORT) {
+  return new Promise((resolve) => {
+    const server = app.listen(port, () => {
+      console.log(`Aplikasi toko berjalan di http://localhost:${port}`);
+      resolve(server);
+    });
+  });
+}
+
+if (require.main === module) {
+  start();
+}
+
+module.exports = { app, start };
